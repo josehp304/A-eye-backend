@@ -52,15 +52,63 @@ A Python application that uses your laptop's webcam to detect objects in real-ti
 
 ## Usage
 
-### Quick Start
+### Desktop Application
 
-1. **Run the main application**:
+1. **Start the application**:
    ```bash
+   cd /home/splity_banana/my_code/ai_security
+   source myenv/bin/activate
    python main.py
    ```
 
-2. **Camera window will open** showing real-time detection
-3. **Press `q` to quit** when you're done
+2. **A window will open** showing your camera feed with object detection
+3. **Move objects in front of the camera** to see them being detected
+4. **Press `q` to quit** when done
+
+### Web Interface 🌐
+
+For a modern web-based interface, use the web application:
+
+1. **Start the web server**:
+   ```bash
+   source myenv/bin/activate
+   python web_app.py
+   ```
+
+2. **Open your browser** and visit: `http://localhost:5000`
+
+3. **Features of the web interface**:
+   - 📹 **Live video stream** with real-time object detection
+   - 🎛️ **Interactive controls** to adjust confidence threshold
+   - 📊 **Real-time status** showing FPS, AI analysis status
+   - 🧠 **AI analysis display** showing Groq insights
+   - 📱 **Responsive design** works on desktop and mobile
+
+### Demo Mode (No Camera Required)
+
+To test the web interface without a camera:
+
+```bash
+python web_demo.py
+```
+
+Visit `http://localhost:5001` to see a simulated video feed.
+
+## Controls
+
+### 🎮 **Desktop Application**
+
+- **`q`** - Quit application
+- **`c`** - Toggle confidence threshold (0.3 ↔ 0.7)
+- **`a`** - Force AI analysis of current frame
+- **`h`** - Show help
+
+### 🌐 **Web Interface**
+
+- **Confidence Slider** - Adjust detection sensitivity in real-time
+- **Live Status Display** - View FPS, AI status, and system health
+- **AI Analysis Panel** - See detailed AI insights about detected scenes
+- **Responsive Design** - Works on desktop, tablet, and mobile devices
 
 ### Test the System
 
@@ -184,9 +232,15 @@ fps = 30
 
 ```
 ai_security/
-├── main.py              # Main application with AI integration
+├── main.py              # Desktop application with AI integration
+├── web_app.py           # Web-based interface (requires camera)
+├── web_demo.py          # Demo web interface (no camera needed)
 ├── test_detection.py    # Test basic object detection
 ├── test_groq.py         # Test Groq API integration
+├── security.py          # Security alarm system
+├── security2.py         # Security system with .env integration
+├── templates/           # Web interface templates
+│   └── index.html       # Main web interface
 ├── requirements.txt     # Python dependencies
 ├── .env                 # Environment variables (API keys)
 ├── README.md           # This file

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Security Camera - Real-time Object Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .video-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        #videoStream {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            height: fit-content;
+        }
+
+        .control-group {
+            margin-bottom: 25px;
+        }
+
+        .control-group h3 {
+            margin-bottom: 15px;
+            color: #fff;
+            font-size: 1.2em;
+        }
+
+        .slider-container {
+            margin-bottom: 10px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            -webkit-appearance: none;
+            margin-bottom: 10px;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-weight: 600;
+            opacity: 0.9;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .ai-analysis {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            grid-column: 1 / -1;
+        }
+
+        .ai-analysis h3 {
+            margin-bottom: 15px;
+            color: #fff;
+            font-size: 1.3em;
+        }
+
+        .analysis-content {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 100px;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+            border-left: 4px solid #00ff88;
+        }
+
+        .loading {
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .fps-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff88;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .indicator {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .indicator.online {
+            background: #00ff88;
+            color: #000;
+        }
+
+        .indicator.analyzing {
+            background: #ffa500;
+            color: #000;
+            animation: pulse 2s infinite;
+        }
+
+        .indicator.offline {
+            background: #ff4757;
+            color: #fff;
+        }
+
+        .control-btn {
+            width: 100%;
+            padding: 12px 16px;
+            margin: 5px 0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: linear-gradient(135deg, #764ba2, #667eea);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .control-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Security Camera</h1>
+            <p>Real-time Object Detection with AI Analysis</p>
+        </div>
+
+        <div class="main-content">
+            <div class="video-section">
+                <h3 style="margin-bottom: 15px;">Live Video Feed</h3>
+                <div class="video-container">
+                    <!-- Hidden video element for webcam capture -->
+                    <video id="webcamVideo" autoplay muted playsinline style="display: none;"></video>
+                    
+                    <!-- Hidden canvas for frame processing -->
+                    <canvas id="captureCanvas" style="display: none;"></canvas>
+                    
+                    <!-- Display the processed stream from backend -->
+                    <img id="videoStream" src="{{ url_for('video_feed') }}" alt="Video Stream">
+                    <div class="fps-indicator" id="fpsIndicator">FPS: --</div>
+                </div>
+                <div class="status-indicators">
+                    <div class="indicator online" id="statusIndicator">🟢 ONLINE</div>
+                    <div class="indicator offline" id="aiIndicator">🤖 AI READY</div>
+                    <div class="indicator offline" id="sourceIndicator">📹 SERVER WEBCAM</div>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <div class="control-group">
+                    <h3>📹 Video Source</h3>
+                    <button id="startWebcamBtn" class="control-btn">Start Frontend Webcam</button>
+                    <button id="stopStreamBtn" class="control-btn" disabled>Stop Stream</button>
+                    <button id="useServerBtn" class="control-btn">Use Server Webcam</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>🎛️ Detection Controls</h3>
+                    <div class="slider-container">
+                        <label class="status-label">Confidence Threshold</label>
+                        <input type="range" id="confidenceSlider" class="slider" min="0.1" max="1.0" step="0.1" value="0.5">
+                        <span class="status-value" id="confidenceValue">0.5</span>
+                    </div>
+                    <div class="slider-container">
+                        <label class="status-label">Stream Quality</label>
+                        <input type="range" id="qualitySlider" class="slider" min="0.3" max="1.0" step="0.1" value="0.8">
+                        <span class="status-value" id="qualityValue">0.8</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>📊 System Status</h3>
+                    <div class="status-item">
+                        <span class="status-label">Backend FPS</span>
+                        <span class="status-value" id="fpsStatus">--</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Frontend FPS</span>
+                        <span class="status-value" id="frontendFpsStatus">--</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Confidence</span>
+                        <span class="status-value" id="confidenceStatus">0.5</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">AI Analysis</span>
+                        <span class="status-value" id="aiStatus">Ready</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Video Source</span>
+                        <span class="status-value" id="sourceStatus">Server</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ai-analysis">
+            <h3>🧠 AI Analysis Results</h3>
+            <div class="analysis-content" id="analysisContent">
+                <div class="loading">Waiting for person detection to trigger AI analysis...</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Powered by YOLOv8 + Groq Llama-4-Scout | Built with Flask & OpenCV</p>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for webcam streaming
+        let webcamStream = null;
+        let isStreaming = false;
+        let streamInterval = null;
+        let frontendFps = 0;
+        let frontendFrameCount = 0;
+        let lastFpsTime = Date.now();
+
+        // Get DOM elements
+        const webcamVideo = document.getElementById('webcamVideo');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const ctx = captureCanvas.getContext('2d');
+        const videoStream = document.getElementById('videoStream');
+        
+        const startWebcamBtn = document.getElementById('startWebcamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
+        const useServerBtn = document.getElementById('useServerBtn');
+        const qualitySlider = document.getElementById('qualitySlider');
+        const qualityValue = document.getElementById('qualityValue');
+
+        // Webcam streaming functions
+        async function startWebcamCapture() {
+            try {
+                console.log('🎥 Starting webcam capture...');
+                
+                // Request webcam access
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 15 }
+                    }
+                });
+
+                webcamVideo.srcObject = webcamStream;
+                
+                // Wait for video to load
+                await new Promise((resolve) => {
+                    webcamVideo.onloadedmetadata = resolve;
+                });
+
+                // Set up canvas
+                captureCanvas.width = 640;
+                captureCanvas.height = 480;
+
+                // Switch to stream mode
+                await fetch('/api/switch_source/stream');
+
+                // Start streaming frames
+                isStreaming = true;
+                streamInterval = setInterval(captureAndSendFrame, 1000 / 15); // 15 FPS
+
+                // Update UI
+                startWebcamBtn.disabled = true;
+                stopStreamBtn.disabled = false;
+                useServerBtn.disabled = false;
+                
+                document.getElementById('sourceIndicator').className = 'indicator analyzing';
+                document.getElementById('sourceIndicator').textContent = '📹 FRONTEND WEBCAM';
+                document.getElementById('sourceStatus').textContent = 'Frontend';
+
+                console.log('✅ Webcam streaming started');
+
+            } catch (error) {
+                console.error('❌ Error starting webcam:', error);
+                alert('Failed to access webcam: ' + error.message);
+            }
+        }
+
+        function captureAndSendFrame() {
+            if (!isStreaming || !webcamStream) return;
+
+            try {
+                // Draw current video frame to canvas
+                ctx.drawImage(webcamVideo, 0, 0, 640, 480);
+
+                // Convert canvas to blob and send to server
+                captureCanvas.toBlob(async (blob) => {
+                    if (!blob) return;
+
+                    try {
+                        const response = await fetch('/stream_input', {
+                            method: 'POST',
+                            body: blob,
+                            headers: {
+                                'Content-Type': 'image/jpeg'
+                            }
+                        });
+
+                        if (response.ok) {
+                            // Update frontend FPS counter
+                            frontendFrameCount++;
+                            const now = Date.now();
+                            if (now - lastFpsTime >= 1000) {
+                                frontendFps = frontendFrameCount;
+                                frontendFrameCount = 0;
+                                lastFpsTime = now;
+                                document.getElementById('frontendFpsStatus').textContent = frontendFps;
+                            }
+                        } else {
+                            console.warn('⚠️ Failed to send frame:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('❌ Error sending frame:', error);
+                    }
+                }, 'image/jpeg', parseFloat(qualitySlider.value));
+
+            } catch (error) {
+                console.error('❌ Error capturing frame:', error);
+            }
+        }
+
+        function stopWebcamCapture() {
+            console.log('⏹️ Stopping webcam capture...');
+
+            isStreaming = false;
+
+            // Clear interval
+            if (streamInterval) {
+                clearInterval(streamInterval);
+                streamInterval = null;
+            }
+
+            // Stop webcam stream
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+            }
+
+            // Update UI
+            startWebcamBtn.disabled = false;
+            stopStreamBtn.disabled = true;
+            
+            document.getElementById('sourceIndicator').className = 'indicator offline';
+            document.getElementById('sourceIndicator').textContent = '📹 STOPPED';
+            document.getElementById('sourceStatus').textContent = 'Stopped';
+            document.getElementById('frontendFpsStatus').textContent = '--';
+
+            console.log('✅ Webcam streaming stopped');
+        }
+
+        async function useServerWebcam() {
+            // Stop frontend streaming first
+            stopWebcamCapture();
+
+            try {
+                // Switch to server webcam
+                await fetch('/api/switch_source/webcam');
+                
+                document.getElementById('sourceIndicator').className = 'indicator online';
+                document.getElementById('sourceIndicator').textContent = '📹 SERVER WEBCAM';
+                document.getElementById('sourceStatus').textContent = 'Server';
+                
+                useServerBtn.disabled = true;
+
+                console.log('✅ Switched to server webcam');
+            } catch (error) {
+                console.error('❌ Error switching to server webcam:', error);
+            }
+        }
+
+        // Event listeners
+        startWebcamBtn.addEventListener('click', startWebcamCapture);
+        stopStreamBtn.addEventListener('click', stopWebcamCapture);
+        useServerBtn.addEventListener('click', useServerWebcam);
+
+        // Quality slider handler
+        qualitySlider.addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            qualityValue.textContent = value.toFixed(1);
+        });
+
+        // Update status information every 2 seconds
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update FPS
+                    document.getElementById('fpsIndicator').textContent = `FPS: ${data.fps}`;
+                    document.getElementById('fpsStatus').textContent = data.fps;
+                    
+                    // Update confidence
+                    document.getElementById('confidenceStatus').textContent = data.confidence.toFixed(1);
+                    
+                    // Update AI status
+                    const aiIndicator = document.getElementById('aiIndicator');
+                    const aiStatus = document.getElementById('aiStatus');
+                    
+                    if (!data.ai_enabled) {
+                        aiIndicator.className = 'indicator offline';
+                        aiIndicator.textContent = '🚫 AI DISABLED';
+                        aiStatus.textContent = 'Disabled';
+                    } else if (data.ai_in_progress) {
+                        aiIndicator.className = 'indicator analyzing';
+                        aiIndicator.textContent = '🔍 ANALYZING';
+                        aiStatus.textContent = 'Analyzing';
+                    } else {
+                        aiIndicator.className = 'indicator online';
+                        aiIndicator.textContent = '🤖 AI READY';
+                        aiStatus.textContent = 'Ready';
+                    }
+
+                    // Update source status
+                    if (data.source === 'webcam' && !isStreaming) {
+                        document.getElementById('sourceIndicator').className = 'indicator online';
+                        document.getElementById('sourceIndicator').textContent = '📹 SERVER WEBCAM';
+                        document.getElementById('sourceStatus').textContent = 'Server';
+                        useServerBtn.disabled = true;
+                    }
+                    
+                    // Update AI analysis content
+                    const analysisContent = document.getElementById('analysisContent');
+                    if (data.ai_analysis && data.ai_analysis !== 'No analysis yet') {
+                        analysisContent.innerHTML = data.ai_analysis.replace(/\n/g, '<br>');
+                        analysisContent.classList.remove('loading');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                    document.getElementById('statusIndicator').className = 'indicator offline';
+                    document.getElementById('statusIndicator').textContent = '🔴 OFFLINE';
+                });
+        }
+
+        // Confidence slider handler
+        const confidenceSlider = document.getElementById('confidenceSlider');
+        const confidenceValue = document.getElementById('confidenceValue');
+
+        confidenceSlider.addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            confidenceValue.textContent = value.toFixed(1);
+            
+            // Update confidence on server
+            fetch(`/api/set_confidence/${value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Confidence updated to:', data.confidence);
+                    }
+                })
+                .catch(error => console.error('Error updating confidence:', error));
+        });
+
+        // Start status updates
+        updateStatus();
+        setInterval(updateStatus, 2000);
+
+        // Handle video stream errors
+        videoStream.addEventListener('error', function() {
+            console.error('Video stream error');
+            document.getElementById('statusIndicator').className = 'indicator offline';
+            document.getElementById('statusIndicator').textContent = '🔴 STREAM ERROR';
+        });
+
+        videoStream.addEventListener('load', function() {
+            document.getElementById('statusIndicator').className = 'indicator online';
+            document.getElementById('statusIndicator').textContent = '🟢 ONLINE';
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (isStreaming) {
+                stopWebcamCapture();
+            }
+        });
+    </script>
+</body>
+</html>
