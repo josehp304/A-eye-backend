@@ -60,7 +60,7 @@ class WebObjectDetector:
         # Stream input handling
         self.current_frame = None
         self.frame_lock = threading.Lock()
-        self.use_webcam = True  # Default to webcam, can be changed to stream input
+        self.use_webcam = False  # Default to webcam, can be changed to stream input
         self.stream_active = False
         
         print("Model loaded successfully!")

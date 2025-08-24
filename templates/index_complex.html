@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Security Camera - Live Stream Display</title>
+    <title>AI Security Camera - Real-time Object Detection</title>
     <style>
         * {
             margin: 0;
@@ -305,6 +305,178 @@
     </div>
 
     <script>
+        // Global variables for webcam streaming
+        let webcamStream = null;
+        let isStreaming = false;
+        let streamInterval = null;
+        let frontendFps = 0;
+        let frontendFrameCount = 0;
+        let lastFpsTime = Date.now();
+
+        // Get DOM elements
+        const webcamVideo = document.getElementById('webcamVideo');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const ctx = captureCanvas.getContext('2d');
+        const videoStream = document.getElementById('videoStream');
+        
+        const startWebcamBtn = document.getElementById('startWebcamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
+        const useServerBtn = document.getElementById('useServerBtn');
+        const qualitySlider = document.getElementById('qualitySlider');
+        const qualityValue = document.getElementById('qualityValue');
+
+        // Webcam streaming functions
+        async function startWebcamCapture() {
+            try {
+                console.log('🎥 Starting webcam capture...');
+                
+                // Request webcam access
+                webcamStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 15 }
+                    }
+                });
+
+                webcamVideo.srcObject = webcamStream;
+                
+                // Wait for video to load
+                await new Promise((resolve) => {
+                    webcamVideo.onloadedmetadata = resolve;
+                });
+
+                // Set up canvas
+                captureCanvas.width = 640;
+                captureCanvas.height = 480;
+
+                // Switch to stream mode
+                await fetch('/api/switch_source/stream');
+
+                // Start streaming frames
+                isStreaming = true;
+                streamInterval = setInterval(captureAndSendFrame, 1000 / 15); // 15 FPS
+
+                // Update UI
+                startWebcamBtn.disabled = true;
+                stopStreamBtn.disabled = false;
+                useServerBtn.disabled = false;
+                
+                document.getElementById('sourceIndicator').className = 'indicator analyzing';
+                document.getElementById('sourceIndicator').textContent = '📹 FRONTEND WEBCAM';
+                document.getElementById('sourceStatus').textContent = 'Frontend';
+
+                console.log('✅ Webcam streaming started');
+
+            } catch (error) {
+                console.error('❌ Error starting webcam:', error);
+                alert('Failed to access webcam: ' + error.message);
+            }
+        }
+
+        function captureAndSendFrame() {
+            if (!isStreaming || !webcamStream) return;
+
+            try {
+                // Draw current video frame to canvas
+                ctx.drawImage(webcamVideo, 0, 0, 640, 480);
+
+                // Convert canvas to blob and send to server
+                captureCanvas.toBlob(async (blob) => {
+                    if (!blob) return;
+
+                    try {
+                        const response = await fetch('/stream_input', {
+                            method: 'POST',
+                            body: blob,
+                            headers: {
+                                'Content-Type': 'image/jpeg'
+                            }
+                        });
+
+                        if (response.ok) {
+                            // Update frontend FPS counter
+                            frontendFrameCount++;
+                            const now = Date.now();
+                            if (now - lastFpsTime >= 1000) {
+                                frontendFps = frontendFrameCount;
+                                frontendFrameCount = 0;
+                                lastFpsTime = now;
+                                document.getElementById('frontendFpsStatus').textContent = frontendFps;
+                            }
+                        } else {
+                            console.warn('⚠️ Failed to send frame:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('❌ Error sending frame:', error);
+                    }
+                }, 'image/jpeg', parseFloat(qualitySlider.value));
+
+            } catch (error) {
+                console.error('❌ Error capturing frame:', error);
+            }
+        }
+
+        function stopWebcamCapture() {
+            console.log('⏹️ Stopping webcam capture...');
+
+            isStreaming = false;
+
+            // Clear interval
+            if (streamInterval) {
+                clearInterval(streamInterval);
+                streamInterval = null;
+            }
+
+            // Stop webcam stream
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+            }
+
+            // Update UI
+            startWebcamBtn.disabled = false;
+            stopStreamBtn.disabled = true;
+            
+            document.getElementById('sourceIndicator').className = 'indicator offline';
+            document.getElementById('sourceIndicator').textContent = '📹 STOPPED';
+            document.getElementById('sourceStatus').textContent = 'Stopped';
+            document.getElementById('frontendFpsStatus').textContent = '--';
+
+            console.log('✅ Webcam streaming stopped');
+        }
+
+        async function useServerWebcam() {
+            // Stop frontend streaming first
+            stopWebcamCapture();
+
+            try {
+                // Switch to server webcam
+                await fetch('/api/switch_source/webcam');
+                
+                document.getElementById('sourceIndicator').className = 'indicator online';
+                document.getElementById('sourceIndicator').textContent = '📹 SERVER WEBCAM';
+                document.getElementById('sourceStatus').textContent = 'Server';
+                
+                useServerBtn.disabled = true;
+
+                console.log('✅ Switched to server webcam');
+            } catch (error) {
+                console.error('❌ Error switching to server webcam:', error);
+            }
+        }
+
+        // Event listeners
+        startWebcamBtn.addEventListener('click', startWebcamCapture);
+        stopStreamBtn.addEventListener('click', stopWebcamCapture);
+        useServerBtn.addEventListener('click', useServerWebcam);
+
+        // Quality slider handler
+        qualitySlider.addEventListener('input', function() {
+            const value = parseFloat(this.value);
+            qualityValue.textContent = value.toFixed(1);
+        });
+
         // Update status information every 2 seconds
         function updateStatus() {
             fetch('/api/status')
@@ -333,6 +505,14 @@
                         aiIndicator.className = 'indicator online';
                         aiIndicator.textContent = '🤖 AI READY';
                         aiStatus.textContent = 'Ready';
+                    }
+
+                    // Update source status
+                    if (data.source === 'webcam' && !isStreaming) {
+                        document.getElementById('sourceIndicator').className = 'indicator online';
+                        document.getElementById('sourceIndicator').textContent = '📹 SERVER WEBCAM';
+                        document.getElementById('sourceStatus').textContent = 'Server';
+                        useServerBtn.disabled = true;
                     }
                     
                     // Update AI analysis content
@@ -373,7 +553,6 @@
         setInterval(updateStatus, 2000);
 
         // Handle video stream errors
-        const videoStream = document.getElementById('videoStream');
         videoStream.addEventListener('error', function() {
             console.error('Video stream error');
             document.getElementById('statusIndicator').className = 'indicator offline';
@@ -383,6 +562,13 @@
         videoStream.addEventListener('load', function() {
             document.getElementById('statusIndicator').className = 'indicator online';
             document.getElementById('statusIndicator').textContent = '🟢 ONLINE';
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (isStreaming) {
+                stopWebcamCapture();
+            }
         });
     </script>
 </body>
