@@ -18,6 +18,11 @@ from dotenv import load_dotenv
 import threading
 from io import BytesIO
 from PIL import Image
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -50,6 +55,22 @@ class WebObjectDetector:
         self.analysis_cooldown = 10  # Seconds between analyses
         self.last_analysis = "No analysis yet"
         self.analysis_in_progress = False
+        
+        # Email alert configuration
+        self.from_email = os.getenv("FROM_EMAIL")
+        self.email_password = os.getenv("EMAIL_PASSWORD")
+        self.to_email = os.getenv("TO_EMAIL")
+        self.last_email_alert_time = 0
+        self.email_alert_cooldown = 300  # 5 minutes between email alerts to avoid spam
+        
+        # Email alert validation
+        if self.from_email and self.email_password and self.to_email:
+            print("✅ Email alert configuration loaded successfully!")
+        else:
+            print("⚠️  Warning: Email configuration incomplete. Email alerts will be disabled.")
+            print(f"   FROM_EMAIL: {'✓' if self.from_email else '✗'}")
+            print(f"   EMAIL_PASSWORD: {'✓' if self.email_password else '✗'}")
+            print(f"   TO_EMAIL: {'✓' if self.to_email else '✗'}")
         
         # Camera setup (now supports both webcam and stream input)
         self.cap = None
@@ -92,6 +113,59 @@ class WebObjectDetector:
         _, buffer = cv2.imencode('.jpg', frame)
         img_base64 = base64.b64encode(buffer).decode('utf-8')
         return f"data:image/jpeg;base64,{img_base64}"
+    
+    def send_email_alert(self, frame, detection_info):
+        """Send email alert with detected frame"""
+        if not all([self.from_email, self.email_password, self.to_email]):
+            print("❌ Email configuration incomplete. Cannot send alert.")
+            return False
+        
+        try:
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = f"🚨 Security Alert - Person Detected - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            msg['From'] = self.from_email
+            msg['To'] = self.to_email
+            
+            # Create HTML content
+            html_content = f"""
+            <html>
+              <body>
+                <h2>🚨 Security Alert</h2>
+                <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                <p><strong>Detection:</strong> Person detected in security feed</p>
+                <p><strong>Confidence:</strong> {detection_info.get('confidence', 'N/A')}</p>
+                <p><strong>AI Analysis:</strong> {self.last_analysis}</p>
+                <p>Please check your security system for more details.</p>
+                <br>
+                <p><em>This is an automated alert from your AI Security System.</em></p>
+              </body>
+            </html>
+            """
+            
+            # Attach HTML content
+            html_part = MIMEText(html_content, 'html')
+            msg.attach(html_part)
+            
+            # Attach image
+            _, img_buffer = cv2.imencode('.jpg', frame)
+            img_part = MIMEImage(img_buffer.tobytes())
+            img_part.add_header('Content-Disposition', 'attachment', filename=f"alert_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg")
+            msg.attach(img_part)
+            
+            # Send email using Gmail SMTP
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(self.from_email, self.email_password)
+            server.send_message(msg)
+            server.quit()
+            
+            print(f"📧 Email alert sent successfully to {self.to_email}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to send email alert: {e}")
+            return False
     
     def analyze_frame_with_groq(self, frame):
         """Send frame to Groq API for analysis when a person is detected"""
@@ -147,6 +221,7 @@ class WebObjectDetector:
     def detect_objects(self, frame):
         """Detect objects in a frame"""
         person_detected = False
+        person_info = None
         
         # Run YOLO inference
         results = self.model(frame, conf=self.confidence_threshold, verbose=False)
@@ -167,6 +242,11 @@ class WebObjectDetector:
                     # Check if person is detected
                     if class_name == "person":
                         person_detected = True
+                        person_info = {
+                            'confidence': f"{confidence:.2f}",
+                            'bbox': [x1, y1, x2, y2],
+                            'class_name': class_name
+                        }
                     
                     # Choose color for this class
                     color = self.colors[class_id % len(self.colors)]
@@ -202,7 +282,7 @@ class WebObjectDetector:
                         1
                     )
         
-        return frame, person_detected
+        return frame, person_detected, person_info
     
     def start_camera(self):
         """Initialize camera"""
@@ -247,7 +327,7 @@ class WebObjectDetector:
                         frame = self.current_frame.copy()
                 
                 # Detect objects in the frame
-                frame_with_detections, person_detected = self.detect_objects(frame)
+                frame_with_detections, person_detected, person_info = self.detect_objects(frame)
                 
                 # Check if we should analyze the frame with Groq
                 current_time = time.time()
@@ -267,6 +347,20 @@ class WebObjectDetector:
                         print("🔍 AI Analysis completed")
                     
                     threading.Thread(target=analyze_async, daemon=True).start()
+                
+                # Check if we should send email alert
+                if (person_detected and person_info and
+                    current_time - self.last_email_alert_time > self.email_alert_cooldown and
+                    all([self.from_email, self.email_password, self.to_email])):
+                    
+                    print("🚨 Person detected! Sending email alert...")
+                    self.last_email_alert_time = current_time
+                    
+                    # Send email alert in a separate thread to avoid blocking
+                    def send_alert_async():
+                        self.send_email_alert(frame_with_detections, person_info)
+                    
+                    threading.Thread(target=send_alert_async, daemon=True).start()
                 
                 # Calculate FPS
                 self.fps_counter += 1
@@ -367,8 +461,46 @@ def status():
         'ai_in_progress': detector.analysis_in_progress,
         'ai_enabled': bool(detector.groq_api_key and detector.groq_api_key != "your_groq_api_key_here"),
         'source': 'webcam' if detector.use_webcam else 'stream',
-        'stream_active': detector.stream_active
+        'stream_active': detector.stream_active,
+        'email_alerts_enabled': bool(detector.from_email and detector.email_password and detector.to_email),
+        'last_email_alert': detector.last_email_alert_time,
+        'email_cooldown_remaining': max(0, detector.email_alert_cooldown - (time.time() - detector.last_email_alert_time))
     })
+
+@app.route('/api/test_email')
+def test_email():
+    """API endpoint to test email functionality"""
+    if not all([detector.from_email, detector.email_password, detector.to_email]):
+        return jsonify({
+            'success': False, 
+            'error': 'Email configuration incomplete',
+            'config_status': {
+                'from_email': bool(detector.from_email),
+                'email_password': bool(detector.email_password),
+                'to_email': bool(detector.to_email)
+            }
+        })
+    
+    try:
+        # Create a test frame (black image with test text)
+        test_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(test_frame, "EMAIL TEST", (200, 240), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3)
+        
+        test_info = {
+            'confidence': '0.99',
+            'bbox': [200, 200, 400, 280],
+            'class_name': 'test'
+        }
+        
+        success = detector.send_email_alert(test_frame, test_info)
+        
+        return jsonify({
+            'success': success,
+            'message': 'Test email sent successfully!' if success else 'Failed to send test email'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/set_confidence/<float:confidence>')
 def set_confidence(confidence):

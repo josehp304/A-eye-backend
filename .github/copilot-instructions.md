@@ -1,6 +1,6 @@
 ## Repo purpose
 
-This repository hosts a simple real-time object detection web service powered by YOLO (Ultralytics) and OpenCV. The server can either read a local webcam or accept JPEG frames posted by a remote frontend and serves a processed MJPEG stream.
+This repository hosts a simple real-time object detection web service powered by YOLO (Ultralytics) and OpenCV. The server can either read a local webcam or accept JPEG frames posted by a remote frontend and serves a processed MJPEG stream. The system includes AI-powered analysis via Groq API and email alert functionality when persons are detected.
 
 These instructions teach an automated coding assistant how to safely and effectively modify this project.
 
@@ -21,11 +21,11 @@ These instructions teach an automated coding assistant how to safely and effecti
 
 ## Key files and where to look
 
-- `web_app.py` — main Flask application and `WebObjectDetector` class (frame ingest, YOLO inference, MJPEG generator).
+- `web_app.py` — main Flask application and `WebObjectDetector` class (frame ingest, YOLO inference, MJPEG generator, email alerts).
 - `templates/index.html` — simplified viewer page (display-only). `templates/index_complex.html` contains the capture-enabled page (backup).
 - `static/` — JS/CSS used by frontend (may contain capture logic in older revisions).
 - `requirements.txt` — pinned dependencies (keep updated).
-- `.env` — contains GROQ_API_KEY and other secrets (not checked in).
+- `.env` — contains GROQ_API_KEY, email credentials (FROM_EMAIL, EMAIL_PASSWORD, TO_EMAIL) and other secrets (not checked in).
 
 ## How to run locally (developer / CI)
 
@@ -46,6 +46,7 @@ These instructions teach an automated coding assistant how to safely and effecti
 
    - curl -s http://localhost:5000/api/status | jq .
    - curl -s http://localhost:5000/video_feed  # should stream multipart JPEGs
+   - curl -s http://localhost:5000/api/test_email  # test email functionality if configured
 
 If you need to test stream ingest, POST a JPEG to `/stream_input` and check `/api/status` for `stream_active: true`.
 
